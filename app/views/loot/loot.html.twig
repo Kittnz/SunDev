@@ -1,0 +1,248 @@
+{% extends "layout.html.twig" %}
+    {% block title %}
+        {{ loot.id }} Loot - {{ parent() }}
+    {% endblock %}
+    {% block content %}
+        <div class="col-md-12">
+            <h2>Loot ID: {{ loot.id }}</h2>
+            {% if loot.creatures is defined %}
+            <div class="col-md-4">
+                <p>
+                    Used by {{ loot.creatures|length }} creature{{ loot.creatures|length > 1 ? 's' : '' }}.
+                </p>
+                <ul>
+                    {% for creature in loot.creatures %}
+                        <li><a href="http://wowhead.com/npc={{ creature.entry }}">{{ creature.entry|getCreatureName }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% if loot.references is defined %}
+            <div class="col-md-4">
+                <p>
+                    Loot used in:
+                </p>
+                <ul>
+                    {% for reference in loot.references %}
+                    <li><a href="{{ app.request.basepath }}/loot/{{ reference.entry }}">Loot {{ reference.entry }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% if item is defined %}
+            <div class="col-md-4">
+                <p>
+                    Used by <a href="http://wowhead.com/item={{ loot.id }}">{{ item }}</a>.
+                </p>
+                </div>
+            {% endif %}
+            <div class="text-right">
+                <button id="add" class="btn btn-info btn-xs">Add</button>
+                {% include 'review.html.twig' %}
+            </div>
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Chance</th>
+                        <th>GroupID</th>
+                        <th>MinCount</th>
+                        <th>MaxCount</th>
+                        <th>Condition</th>
+                        <th>Condition 1</th>
+                        <th>Condition 2</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in loot.items %}
+                    <tr>
+                        <td>{{ item.item }}</td>
+                        <td>
+                            {% if item.ChanceOrQuestChance > 0 and item.mincountOrRef < 0 %}
+                            <a href="{{ app.request.basepath }}/loot/reference/{{ item.item }}">Reference Loot {{ item.item }}</a>
+                            {% else %}
+                            <a href="http://wowhead.com/item={{ item.item }}">{{ item.item|getItemName }}</a>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.ChanceOrQuestChance }}</td>
+                        <td>{{ item.groupid }}</td>
+                        <td>{{ item.mincountOrRef }}</td>
+                        <td>{{ item.maxcount }}</td>
+                        <td>{{ item.lootcondition }}</td>
+                        <td>{{ item.condition_value1 }}</td>
+                        <td>{{ item.condition_value2 }}</td>
+                        <td><span class="glyphicon glyphicon-remove" onclick="removeItem({{ item.item }})"></span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endblock %}
+    {% block script %}
+        <script src="{{ app.request.basepath }}/js/dev.js"></script>
+        <script type="text/javascript">
+            var Loot = {{ loot|json_encode|raw }};
+            var OldValue;
+            var i;
+            var Table = $('table');
+
+            var Info = { "entryorguid": "{{ loot.id }}", "source_type": "5{{ loot.type }}" };
+
+            /**
+             * Click on TD makes it editable with Input
+             */
+            Table.on('click', 'td', function(event) {
+                event.stopPropagation();
+
+                var td_value =  Table.find('input').val();
+                Table.find('input').closest('td').text(td_value);
+
+
+                if( !isNaN($(this).text()) ) {
+                    if($(this).find('input').length != 0)
+                    {
+                        $(this).find('input').focus();
+                    }
+                    else
+                    {
+                        var Value = $(this).text();
+                        $(this).html('<input class="form-control">').find('input').focus().val(Value);
+                    }
+                }
+            });
+
+            /**
+             * Reset the open input upon clicking anywhere on the document.
+             */
+            $(document).click(function() {
+                var Input = $('table > tbody > tr > td').find('input');
+                var Value = Input.val();
+                Input.closest('td').html(Value).focus();
+            });
+
+            /**
+             * On ID change, find the new name
+             */
+            Table.on('change', 'td:first-child', function() {
+                var This = $(this);
+                var Value = $(this).find('input').val();
+                Loot.items[Value] = Loot.items[OldValue];
+                Loot.items[Value].item = Value;
+                delete Loot.items[OldValue];
+                $.ajax({
+                    type: 'GET',
+                    url: '/item/' + Value + '/name',
+                    dataType: 'text',
+                    'success': function (data) {
+                        This.closest('tr').find('td:nth-child(2)').html('<a href="http://wowhead.com/item=' + Value + '">' + data + '</a>');
+                    }
+                });
+            }).on('click', 'td:first-child', function() {
+                OldValue = $(this).find('input').val();
+            });
+
+            Table.on('change', 'td:nth-child(3)', function() {
+                var ID = $(this).closest('tr').find('td:first-child').text();
+                var Value = $(this).find('input').val();
+                Loot.items[ID].ChanceOrQuestChance = Value;
+            });
+            Table.on('change', 'td:nth-child(4)', function() {
+                var ID = $(this).closest('tr').find('td:first-child').text();
+                var Value = $(this).find('input').val();
+                Loot.items[ID].groupid = Value;
+            });
+            Table.on('change', 'td:nth-child(5)', function() {
+                var ID = $(this).closest('tr').find('td:first-child').text();
+                var Value = $(this).find('input').val();
+                Loot.items[ID].mincountOrRef = Value;
+            });
+            Table.on('change', 'td:nth-child(6)', function() {
+                var ID = $(this).closest('tr').find('td:first-child').text();
+                var Value = $(this).find('input').val();
+                Loot.items[ID].maxcount = Value;
+            });
+            Table.on('change', 'td:nth-child(7)', function() {
+                var ID = $(this).closest('tr').find('td:first-child').text();
+                var Value = $(this).find('input').val();
+                Loot.items[ID].lootcondition = Value;
+            });
+            Table.on('change', 'td:nth-child(8)', function() {
+                var ID = $(this).closest('tr').find('td:first-child').text();
+                var Value = $(this).find('input').val();
+                Loot.items[ID].condition_value1 = Value;
+            });
+            Table.on('change', 'td:nth-child(9)', function() {
+                var ID = $(this).closest('tr').find('td:first-child').text();
+                var Value = $(this).find('input').val();
+                Loot.items[ID].condition_value2 = Value;
+            });
+
+            function removeItem(id) {
+                delete Loot.items[id];
+                $('table > tbody > tr:has(td:first-child:contains(' + id + '))').remove();
+            }
+
+            function generateData(Loot) {
+                console.log(Loot);
+                var Data = [];
+                $.each(Loot.items, function(key, value){
+                    if(this.ChanceOrQuestChance)
+                        Data.push([this.item, this.ChanceOrQuestChance, this.groupid, this.mincountOrRef, this.maxcount, this.lootcondition, this.condition_value1, this.condition_value2 ]);
+                });
+                return Data;
+            }
+            $('#apply').click(function () {
+                apply(generateData(Loot), Info);
+            });
+            $('#review').click(function () {
+                review(generateData(Loot), Info);
+            });
+            $('#validate').click(function () {
+                validate(generateData(Loot), Info);
+            });
+            $('#refuse').click(function () {
+                refuse(generateData(Loot), Info);
+            });
+            $('#add').click(function() {
+                var New = {
+                    "entry": "{{ loot.id }}",
+                    "item": "0",
+                    "ChanceOrQuestChance": "100",
+                    "groupid": "0",
+                    "mincountOrRef": "1",
+                    "maxcount": "1",
+                    "lootcondition": "0",
+                    "condition_value1": "0",
+                    "condition_value2": "0"
+                };
+                Loot.items[0] = New;
+                $('<tr>' +
+                '   <td>0</td>' +
+                '   <td></td>' +
+                '   <td>100</td>' +
+                '   <td>0</td>' +
+                '   <td>1</td>' +
+                '   <td>1</td>' +
+                '   <td>0</td>' +
+                '   <td>0</td>' +
+                '   <td>0</td>' +
+                '   <td><span class="glyphicon glyphicon-remove" onclick="removeItem(0)"></span></td>' +
+                '</tr>').appendTo('table > tbody');
+                console.log(Loot.items);
+            });
+        </script>
+        <script type="text/javascript" src="http://static.wowhead.com/widgets/power.js"></script>
+        <script type="text/javascript">
+            /**
+             * WoWHead
+             */
+            var wowhead_tooltips = {
+                "iconizelinks": true,
+                "renamelinks": true,
+                "droppedby": true,
+                "dropchance": true,
+            }
+        </script>
+    {% endblock %}
